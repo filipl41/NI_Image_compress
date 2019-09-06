@@ -9,15 +9,29 @@ m = 4
 codebook_size = 256
 pop_size = 65
 max_gen = 500
-
+mutation_prob = 0.1
 
 def divide_image(img, n, m):
     image_vectors = []
-    for i in range(0, img.shape[0] - n, n):
-        for j in range(0, img.shape[1] -m, m):
+    for i in range(0, img.shape[0] - n + 1, n):
+        for j in range(0, img.shape[1] -m + 1, m):
             image_vectors.append(img[i : i + m, j : j + m])
     image_vectors = np.asarray(image_vectors).astype(int)
     return image_vectors
+
+
+def decode_codebook(codebook, codebook_size, index_vector,  n, m):
+    img = np.zeros((512, 512))
+    i = 0
+    j = 0
+    for k in range (0, index_vector.shape[0]):
+        index = index_vector[k]
+        img[i : i + n, j : j + m] = codebook[index].reshape(4, 4)
+        j = j + m
+        if (j == 512):
+            j = 0
+            i = i + n
+    return img
 
 
 def build_codebook(codebook_size, vector_dimension, image_vectors):
@@ -32,14 +46,14 @@ def psnr(x, y):
     mse = np.square(x - y).mean()
     if mse == 0:
         return -1
-    return 10 * np.log10(255 * 255 / mse)
+    return int (10 * np.log10(255 * 255 / mse))
     
 
 def image_block_classifier(image_vectors, codebook):
-    index_vector = np.zeros((image_vectors.shape[0],1))
+    index_vector = np.zeros((image_vectors.shape[0],1)).astype(int)
     for i in range(0, image_vectors.shape[0]):
         hpsnr = 0
-        best_unit = 1
+        best_unit = 0
         for j in range(0, codebook.shape[0]):
             tpsnr = psnr(image_vectors[i].reshape(1, codebook.shape[1]), codebook[j])
             if (tpsnr > hpsnr):
@@ -49,22 +63,97 @@ def image_block_classifier(image_vectors, codebook):
     return index_vector
 
 def initialize_population(codebook, pop_size, image_vectors, chromosom_size, index_vector, unit):
-    population = np.zeros((pop_size, chromosom_size))
+    population = np.zeros((pop_size, chromosom_size)).astype(int)
     all_blocks = np.asarray(index_vector == unit).nonzero()[0]
+    if (all_blocks.shape[0] == 0):
+        return  population
     for i in range(0, pop_size):
         for j in range(0, chromosom_size):
             m = np.random.randint(0,all_blocks.shape[0])
-            vector = image_vectors[m].reshape(1, chromosom_size)
+            n_r = all_blocks[m]
+            vector = image_vectors[n_r].reshape(1, chromosom_size)
             population[i, j] = vector[0][j]
 
     return population
 
 
+def calculate_diff_pixels(image_vectors, index_vector, population, pop_size, chromosom_size, unit):
+    diff_pixels = np.zeros((pop_size, chromosom_size))
+    arr = np.asarray(index_vector == unit).nonzero()[0]
+    for i in range(0, pop_size):
+        for j in range(0, chromosom_size):
+            value = 0
+            for k in range(0, arr.shape[0]):
+                ind = arr[k]
+                vector = image_vectors[ind].reshape(1, chromosom_size)
+                value = value + (population[i, j] - vector[0][j])
+            diff_pixels[i, j] = value
+    return diff_pixels
 
+
+def fitness_calculation(pop_size, population, chromosom_size, diff_pixel):
+    fitness = []
+    for i in range(0, pop_size):
+        counter = 0
+        for j in range(0, pop_size):
+            if (i == j):
+                continue
+            for k in range(0, chromosom_size):
+                if diff_pixel[i][k] < diff_pixel[j][k]:
+                    counter = counter + 1
+        fitness.append(counter / chromosom_size)
     
+    fitness =  np.asarray(fitness).astype(float)
+    return fitness
+    
+
+def selection(fitnes_values):
+    parent1 = np.argmax(fitnes_values)
+    fitnes_values[parent1] = -1
+    parent2 = np.argmax(fitnes_values)
+    return parent1, parent2
+        
+
+def crossover(parent1, parent2, codebook_size):
+    n = np.random.randint(0, codebook_size)
+    children1 = parent1
+    children2 = parent2
+    children1[ : n] = parent1[ : n]
+    children1[n : ] = parent2[n :]
+    children2[ : n] = parent2[ : n]
+    children2[n : ] = parent1[n : ]
+    return children1, children2
+
+def mutation(p, chromosom):
+    p_p = np.random.rand()
+    if p_p > p:
+        m = np.random.randint(0, 16)
+        chromosom[m] = np.average(chromosom)
+
+    return chromosom
+ 
+
 
 image_vectors = divide_image(img, n, m)
 codebook = build_codebook(codebook_size, n * m, image_vectors)
 index_vector = image_block_classifier(image_vectors, codebook)
+img = decode_codebook(codebook, codebook_size, index_vector, n, m)
+cv2.imwrite("compressed.bmp", img)
 for i in range(0, codebook_size):
     population = initialize_population(codebook, pop_size, image_vectors, n * m, index_vector, i)
+    diff_pixels = calculate_diff_pixels(image_vectors, index_vector,population, pop_size, n * m, i)
+    fitness_values = fitness_calculation(pop_size, population, n * m, diff_pixels)
+    parent1, parent2 = selection(fitness_values)
+    children1, children2 = crossover(population[parent1], population[parent2],n * m)
+    chromosom1 = mutation(mutation_prob, children1)
+    chromosom2 = mutation(mutation_prob, children2)
+    diff_pixels_offspring = calculate_diff_pixels(image_vectors, index_vector, np.vstack((chromosom1, chromosom2)), 2, n * m, i)
+    fitness_values_offspring = fitness_calculation(2, np.vstack((chromosom1, chromosom2)), n * m, diff_pixels)
+    first = np.random.randint(0, pop_size)
+    second = np.random.randint(0, pop_size)
+    if fitness_values[first] < fitness_values_offspring[0]:
+        population[parent1] = chromosom1
+    if fitness_values[second] < fitness_values_offspring[1]:
+        population[parent2] = chromosom2
+
+    
