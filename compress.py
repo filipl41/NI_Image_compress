@@ -86,7 +86,7 @@ def calculate_diff_pixels(image_vectors, index_vector, population, pop_size, chr
             for k in range(0, arr.shape[0]):
                 ind = arr[k]
                 vector = image_vectors[ind].reshape(1, chromosom_size)
-                value = value + (population[i, j] - vector[0][j])
+                value = value + abs(population[i, j] - vector[0][j])
             diff_pixels[i, j] = value
     return diff_pixels
 
@@ -170,12 +170,10 @@ for i in range(0, codebook_size):
         if fitness_values[second] < fitness_values_offspring[1]:
             population[parent2] = chromosom2
 
-        if sumFit == 0:
-            sumFit = np.sum(fitness_values) + fitness_values_offspring[0]
-        else :
-            sumFit = sumFit + fitness_values_offspring[0]
+        sumFit = sumFit + fitness_values_offspring[0]
         generation = generation + 1
         if generation == 1:
+            old_fitness = sumFit
             continue
         termination_criteria = check_termination_criterion(generation, max_gen, sumFit, old_fitness, 0.01)
         if fitness_values[parent1] > fitness_values_offspring[0]:
@@ -183,6 +181,7 @@ for i in range(0, codebook_size):
         else:
             best_chromosom = chromosom1
         old_fitness = sumFit
+
     codebook[i] = best_chromosom  
 
 img = decode_codebook(codebook, codebook_size, index_vector, n, m)
