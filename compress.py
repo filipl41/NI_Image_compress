@@ -109,8 +109,10 @@ def fitness_calculation(pop_size, population, chromosom_size, diff_pixel):
 
 def selection(fitnes_values):
     parent1 = np.argmax(fitnes_values)
+    tmp = np.max(fitnes_values)
     fitnes_values[parent1] = -1
     parent2 = np.argmax(fitnes_values)
+    fitnes_values[parent1] = tmp
     return parent1, parent2
         
 
@@ -132,28 +134,56 @@ def mutation(p, chromosom):
 
     return chromosom
  
-
+def check_termination_criterion(generation, max_gen, sum_fit, old_fitness, eps):
+    if generation >= max_gen:
+        return True
+    new_average_fit = sum_fit / generation
+    old_average_fit = old_fitness / (generation - 1)
+    if abs(new_average_fit - old_average_fit) < eps:
+        return True
+    return False
 
 image_vectors = divide_image(img, n, m)
 codebook = build_codebook(codebook_size, n * m, image_vectors)
 index_vector = image_block_classifier(image_vectors, codebook)
-img = decode_codebook(codebook, codebook_size, index_vector, n, m)
-cv2.imwrite("compressed.bmp", img)
 for i in range(0, codebook_size):
+    generation = 0
+    termination_criteria = False
+    old_fitness = 0
+    sumFit = 0
+    best_chromosom = np.zeros((1, n * m), dtype=int)
     population = initialize_population(codebook, pop_size, image_vectors, n * m, index_vector, i)
     diff_pixels = calculate_diff_pixels(image_vectors, index_vector,population, pop_size, n * m, i)
     fitness_values = fitness_calculation(pop_size, population, n * m, diff_pixels)
-    parent1, parent2 = selection(fitness_values)
-    children1, children2 = crossover(population[parent1], population[parent2],n * m)
-    chromosom1 = mutation(mutation_prob, children1)
-    chromosom2 = mutation(mutation_prob, children2)
-    diff_pixels_offspring = calculate_diff_pixels(image_vectors, index_vector, np.vstack((chromosom1, chromosom2)), 2, n * m, i)
-    fitness_values_offspring = fitness_calculation(2, np.vstack((chromosom1, chromosom2)), n * m, diff_pixels)
-    first = np.random.randint(0, pop_size)
-    second = np.random.randint(0, pop_size)
-    if fitness_values[first] < fitness_values_offspring[0]:
-        population[parent1] = chromosom1
-    if fitness_values[second] < fitness_values_offspring[1]:
-        population[parent2] = chromosom2
+        
+    while termination_criteria == False:        
+        parent1, parent2 = selection(fitness_values)
+        children1, children2 = crossover(population[parent1], population[parent2],n * m)
+        chromosom1 = mutation(mutation_prob, children1)
+        chromosom2 = mutation(mutation_prob, children2)
+        diff_pixels_offspring = calculate_diff_pixels(image_vectors, index_vector, np.vstack((chromosom1, chromosom2)), 2, n * m, i)
+        fitness_values_offspring = fitness_calculation(2, np.vstack((chromosom1, chromosom2)), n * m, diff_pixels)
+        first = np.random.randint(0, pop_size)
+        second = np.random.randint(0, pop_size)
+        if fitness_values[first] < fitness_values_offspring[0]:
+            population[parent1] = chromosom1
+        if fitness_values[second] < fitness_values_offspring[1]:
+            population[parent2] = chromosom2
 
-    
+        if sumFit == 0:
+            sumFit = np.sum(fitness_values) + fitness_values_offspring[0]
+        else :
+            sumFit = sumFit + fitness_values_offspring[0]
+        generation = generation + 1
+        if generation == 1:
+            continue
+        termination_criteria = check_termination_criterion(generation, max_gen, sumFit, old_fitness, 0.01)
+        if fitness_values[parent1] > fitness_values_offspring[0]:
+            best_chromosom = population[parent1]
+        else:
+            best_chromosom = chromosom1
+        old_fitness = sumFit
+    codebook[i] = best_chromosom  
+
+img = decode_codebook(codebook, codebook_size, index_vector, n, m)
+cv2.imwrite("compressed.bmp", img)
