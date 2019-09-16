@@ -165,21 +165,33 @@ for i in range(0, codebook_size):
         fitness_values_offspring = fitness_calculation(2, np.vstack((chromosom1, chromosom2)), n * m, diff_pixels)
         first = np.random.randint(0, pop_size)
         second = np.random.randint(0, pop_size)
-        if fitness_values[first] < fitness_values_offspring[0]:
-            population[parent1] = chromosom1
-        if fitness_values[second] < fitness_values_offspring[1]:
-            population[parent2] = chromosom2
+        third = np.random.randint(0, pop_size)
+        min_index = first
+        if fitness_values[first] > fitness_values[second]:
+            min_index = second
+        if fitness_values[min_index] > fitness_values[third]:
+            min_index = third
+        if fitness_values[min_index] < np.amax(fitness_values_offspring):
+            arg = np.argmax(fitness_values_offspring)
+            if arg == 0:
+                population[min_index] = chromosom1
+            else :
+                population[min_index] = chromosom2
 
-        sumFit = sumFit + fitness_values_offspring[0]
+        sumFit = sumFit + np.amax(fitness_values_offspring)
         generation = generation + 1
         if generation == 1:
             old_fitness = sumFit
             continue
         termination_criteria = check_termination_criterion(generation, max_gen, sumFit, old_fitness, 0.01)
-        if fitness_values[parent1] > fitness_values_offspring[0]:
+        if fitness_values[parent1] > np.amax(fitness_values_offspring):
             best_chromosom = population[parent1]
         else:
-            best_chromosom = chromosom1
+            arg = np.argmax(fitness_values_offspring)
+            if arg == 0:
+                best_chromosom = chromosom1
+            else:
+                best_chromosom = chromosom2
         old_fitness = sumFit
 
     codebook[i] = best_chromosom  
