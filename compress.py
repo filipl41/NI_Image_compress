@@ -108,12 +108,12 @@ def fitness_calculation(pop_size, population, chromosom_size, diff_pixel):
     
 
 def selection(fitnes_values):
-    parent1 = np.argmax(fitnes_values)
-    tmp = np.max(fitnes_values)
-    fitnes_values[parent1] = -1
-    parent2 = np.argmax(fitnes_values)
-    fitnes_values[parent1] = tmp
-    return parent1, parent2
+    fitness_sum = np.sum(fitnes_values)
+    if fitness_sum == 0:
+        return [0, 0]
+    fitness_prob = fitnes_values / fitness_sum
+    return np.random.choice(fitness_values.shape[0], 2,  p=fitness_prob)
+
         
 
 def crossover(parent1, parent2, codebook_size):
@@ -184,16 +184,12 @@ for i in range(0, codebook_size):
             old_fitness = sumFit
             continue
         termination_criteria = check_termination_criterion(generation, max_gen, sumFit, old_fitness, 0.01)
-        if fitness_values[parent1] > np.amax(fitness_values_offspring):
-            best_chromosom = population[parent1]
-        else:
-            arg = np.argmax(fitness_values_offspring)
-            if arg == 0:
-                best_chromosom = chromosom1
-            else:
-                best_chromosom = chromosom2
         old_fitness = sumFit
 
+    diff_pixels = calculate_diff_pixels(image_vectors, index_vector,population, pop_size, n * m, i)
+    fitness_values = fitness_calculation(pop_size, population, n * m, diff_pixels)
+    best_chromosom_index = np.argmax(fitness_values)
+    best_chromosom = population[best_chromosom_index]
     codebook[i] = best_chromosom  
 
 img = decode_codebook(codebook, codebook_size, index_vector, n, m)
